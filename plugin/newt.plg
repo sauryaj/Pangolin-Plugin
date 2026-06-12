@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name        "newt">
 <!ENTITY author      "Fossorial">
-<!ENTITY version     "2026.06.12.0415">
+<!ENTITY version     "2026.06.12.0419">
 <!ENTITY launch      "Settings/Newt">
 <!ENTITY gitUser     "sauryaj">
 <!ENTITY gitRepo     "Pangolin-Plugin">
@@ -13,14 +13,14 @@
 <!-- Newt upstream binary -->
 <!ENTITY newtVer    "1.12.5">
 <!ENTITY newtFile   "newt_linux_amd64">
-<!ENTITY newtURL    "https://github.com/fosrl/newt/releases/download/v&newtVer;/&newtFile;">
+<!ENTITY newtURL    "https://github.com/fosrl/newt/releases/download/&newtVer;/&newtFile;">
 <!ENTITY newtSHA256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5">
 
 <!-- Plugin support package (built from src/) -->
 <!ENTITY pkgName       "unraid-newt-utils">
 <!ENTITY pkgFile       "&pkgName;-&version;-noarch-1.txz">
 <!ENTITY pkgURL        "https://github.com/&gitUser;/&gitRepo;/releases/download/&version;/&pkgFile;">
-<!ENTITY pkgSHA256     "c49e01aa98b0c99d3993f6898fdb3ea5416821461b21ee332adf84360484bb64">
+<!ENTITY pkgSHA256     "7922b42e65c9c0910b5e2033c7017069720dced10ccbe0c4cdc548601d1addec">
 ]>
 
 <PLUGIN
