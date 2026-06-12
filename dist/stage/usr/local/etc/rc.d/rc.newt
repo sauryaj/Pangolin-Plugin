@@ -1,0 +1,146 @@
+#!/bin/sh
+# /etc/rc.d/rc.newt - start/stop the Newt daemon on Unraid
+#
+# Sourced from /boot/config/plugins/newt/newt.cfg
+
+PLUGIN=newt
+DAEMON=/usr/local/sbin/newt
+LOGFILE=/var/log/newt.log
+PIDFILE=/var/run/newt.pid
+CFG_FILE=/boot/config/plugins/newt/newt.cfg
+
+log() {
+    echo "$(date '+%b %e %T') Unraid-Newt: $*" >> "$LOGFILE"
+    echo "$*"
+}
+
+is_running() {
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE" 2>/dev/null)
+        if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    # Fallback to pgrep
+    /usr/bin/pgrep -f "^${DAEMON}" >/dev/null 2>&1
+}
+
+start_newt() {
+    if is_running ; then
+        log "Newt daemon already running."
+        return 0
+    fi
+
+    # Sourced parameters
+    if [ -f "$CFG_FILE" ]; then
+        # Minimal parser to load settings
+        # shellcheck disable=SC1090
+        . "$CFG_FILE"
+    fi
+
+    if [ "$ENABLE_NEWT" = "0" ] || [ "$ENABLE_NEWT" = "false" ] || [ -z "$ENABLE_NEWT" ]; then
+        log "Newt is disabled in plugin settings; not starting."
+        return 0
+    fi
+
+    if [ -z "$NEWT_ID" ] || [ -z "$NEWT_SECRET" ] || [ -z "$PANGOLIN_ENDPOINT" ]; then
+        log "Error: Missing ID, Secret, or Endpoint. Configure in Settings -> Newt."
+        return 1
+    fi
+
+    # Set up environment variables for the daemon
+    export PANGOLIN_ENDPOINT="$PANGOLIN_ENDPOINT"
+    export NEWT_ID="$NEWT_ID"
+    export NEWT_SECRET="$NEWT_SECRET"
+    export MTU="${MTU:-1280}"
+    export DNS="${DNS:-9.9.9.9}"
+    export LOG_LEVEL="${LOG_LEVEL:-INFO}"
+    export INTERFACE="${INTERFACE:-newt}"
+    
+    if [ "$DISABLE_SSH" = "1" ] || [ "$DISABLE_SSH" = "true" ]; then
+        export DISABLE_SSH="true"
+    else
+        export DISABLE_SSH="false"
+    fi
+
+    # Optional custom args (advanced users)
+    EXTRA_ARGS=""
+    if [ -f /boot/config/plugins/newt/custom-params.sh ]; then
+        # shellcheck disable=SC1091
+        . /boot/config/plugins/newt/custom-params.sh
+        EXTRA_ARGS="$NEWT_CUSTOM_PARAMS"
+    fi
+
+    log "Starting Newt daemon..."
+    
+    # Run the daemon
+    # We redirect stdin from /dev/null and stdout/stderr to $LOGFILE.
+    # We use nohup to prevent it from terminating when the shell exits.
+    nohup "$DAEMON" $EXTRA_ARGS >>"$LOGFILE" 2>&1 &
+    PID=$!
+    echo "$PID" > "$PIDFILE"
+
+    # Wait a bit to ensure it doesn't crash instantly and the PID stays active
+    sleep 1
+    if kill -0 "$PID" 2>/dev/null; then
+        log "Newt daemon started successfully (PID: $PID)."
+    else
+        log "ERROR: Newt daemon failed to start. Check $LOGFILE."
+        rm -f "$PIDFILE"
+        return 1
+    fi
+}
+
+stop_newt() {
+    log "Stopping Newt daemon."
+    
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE" 2>/dev/null)
+        if [ -n "$PID" ]; then
+            kill "$PID" 2>/dev/null
+            rm -f "$PIDFILE"
+        fi
+    fi
+
+    # Fallback to kill by name if still running
+    /usr/bin/pkill -TERM -f "^${DAEMON}" 2>/dev/null
+
+    # Wait up to 5s for process to exit
+    for _ in $(seq 1 10); do
+        is_running || break
+        sleep 0.5
+    done
+
+    if is_running ; then
+        log "Daemon still running after SIGTERM; sending SIGKILL."
+        /usr/bin/pkill -9 -f "^${DAEMON}" 2>/dev/null
+        sleep 0.5
+    fi
+}
+
+restart_newt() {
+    stop_newt
+    start_newt
+}
+
+status_newt() {
+    if is_running ; then
+        PID=$(cat "$PIDFILE" 2>/dev/null)
+        echo "Newt daemon is running (PID: $PID)."
+        return 0
+    else
+        echo "Newt daemon is stopped."
+        return 1
+    fi
+}
+
+case "$1" in
+    start)   start_newt   ;;
+    stop)    stop_newt    ;;
+    restart) restart_newt ;;
+    status)  status_newt  ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
