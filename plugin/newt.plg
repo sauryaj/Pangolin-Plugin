@@ -1,0 +1,152 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name        "newt">
+<!ENTITY author      "Fossorial">
+<!ENTITY version     "2026.06.12.0408">
+<!ENTITY launch      "Settings/Newt">
+<!ENTITY gitUser     "saurya">
+<!ENTITY gitRepo     "newt-unraid">
+<!ENTITY pluginURL   "https://raw.githubusercontent.com/&gitUser;/&gitRepo;/main/plugin/newt.plg">
+<!ENTITY pluginLOC   "/boot/config/plugins/&name;">
+<!ENTITY emhttpLOC   "/usr/local/emhttp/plugins/&name;">
+
+<!-- Newt upstream binary -->
+<!ENTITY newtVer    "1.12.5">
+<!ENTITY newtFile   "newt_linux_amd64">
+<!ENTITY newtURL    "https://github.com/fosrl/newt/releases/download/v&newtVer;/&newtFile;">
+<!ENTITY newtSHA256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5">
+
+<!-- Plugin support package (built from src/) -->
+<!ENTITY pkgName       "unraid-newt-utils">
+<!ENTITY pkgFile       "&pkgName;-&version;-noarch-1.txz">
+<!ENTITY pkgURL        "https://github.com/&gitUser;/&gitRepo;/releases/download/&version;/&pkgFile;">
+<!ENTITY pkgSHA256     "baed611c2efca0ab0def07c5fde2016e0798ee34fa318a0879207168d2ef2b57">
+]>
+
+<PLUGIN
+  name="&name;"
+  author="&author;"
+  version="&version;"
+  launch="&launch;"
+  pluginURL="&pluginURL;"
+  min="6.9.0"
+  support="https://github.com/&gitUser;/&gitRepo;/issues"
+  project="https://github.com/&gitUser;/&gitRepo;"
+>
+
+<CHANGES>
+<![CDATA[
+### 2026.06.12.1600
+- Initial release. Newt client 1.12.5 running natively on Unraid.
+]]>
+</CHANGES>
+
+<!--
+================================================================================
+  Fetch Newt binary
+================================================================================
+-->
+<FILE Name="&pluginLOC;/&newtFile;">
+<URL>&newtURL;</URL>
+<SHA256>&newtSHA256;</SHA256>
+</FILE>
+
+<!--
+================================================================================
+  Fetch plugin support package (pages, rc.d script, etc.)
+================================================================================
+-->
+<FILE Name="&pluginLOC;/&pkgFile;">
+<URL>&pkgURL;</URL>
+<SHA256>&pkgSHA256;</SHA256>
+</FILE>
+
+<!--
+================================================================================
+  Install script
+================================================================================
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# Clean any prior in-RAM install of plugin pages
+if [ -d "/usr/local/emhttp/plugins/newt" ]; then
+    rm -rf /usr/local/emhttp/plugins/newt
+fi
+
+# Install plugin support package (pages, rc.d script, default config, etc.)
+upgradepkg --install-new /boot/config/plugins/newt/unraid-newt-utils-]]>&version;<![CDATA[-noarch-1.txz
+
+# Install Newt upstream binary into /usr/local/sbin
+mkdir -p /usr/local/sbin
+install -m 0755 /boot/config/plugins/newt/]]>&newtFile;<![CDATA[ /usr/local/sbin/newt
+
+# Persist Newt's configuration directory on the USB flash via symlink.
+# Newt reads/writes config details under /root/.config/newt-client/config.json.
+mkdir -p /boot/config/plugins/newt/.config/newt-client
+mkdir -p /root/.config
+
+# Make sure target paths are clear, then link them
+[ -L /root/.config/newt-client ] && rm -f /root/.config/newt-client
+[ -d /root/.config/newt-client ] && rm -rf /root/.config/newt-client
+ln -s /boot/config/plugins/newt/.config/newt-client /root/.config/newt-client
+
+# Exclude state/config dir from Unraid Connect flash backup to protect secrets
+echo ".config" >> /boot/config/plugins/newt/.gitignore
+
+# Start the daemon if enabled
+/etc/rc.d/rc.newt start
+
+# Clean up older versions on flash
+rm -f $(ls /boot/config/plugins/newt/unraid-newt-utils-*.txz 2>/dev/null | grep -v ']]>&version;<![CDATA[')
+
+echo ""
+echo "----------------------------------------------------"
+echo " Newt ]]>&newtVer;<![CDATA[ has been installed."
+echo " Plugin version: ]]>&version;<![CDATA["
+echo "----------------------------------------------------"
+echo ""
+]]>
+</INLINE>
+</FILE>
+
+<!--
+================================================================================
+  Remove script
+================================================================================
+-->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+<![CDATA[
+# Stop the daemon (graceful), then make sure nothing lingers
+/etc/rc.d/rc.newt stop 2>/dev/null
+pkill -9 -f '/usr/local/sbin/newt' 2>/dev/null
+rm -f /var/run/newt.pid
+
+# Remove binary
+rm -f /usr/local/sbin/newt
+
+# Remove plugin package
+removepkg unraid-newt-utils 2>/dev/null
+
+# Drop persistence symlink
+rm -f /root/.config/newt-client
+
+# Remove pages
+rm -rf /usr/local/emhttp/plugins/newt
+
+# Tarball / package caches on flash
+rm -f /boot/config/plugins/newt/unraid-newt-utils-*.txz
+
+echo ""
+echo "----------------------------------------------------"
+echo " Newt plugin removed."
+echo " Configuration preserved at /boot/config/plugins/newt/"
+echo " (delete that directory by hand to fully purge.)"
+echo "----------------------------------------------------"
+echo ""
+]]>
+</INLINE>
+</FILE>
+
+</PLUGIN>

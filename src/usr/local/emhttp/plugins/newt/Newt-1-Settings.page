@@ -1,0 +1,343 @@
+Menu="Newt:1"
+Title="Settings"
+Icon="gears"
+Tag="gears"
+Markdown="true"
+---
+<?php
+try {
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+require_once "{$docroot}/plugins/newt/include/common.php";
+
+$cfg = \Newt\readCfg();
+
+$enabled    = $cfg['ENABLE_NEWT']       ?? '0';
+$endpoint   = $cfg['PANGOLIN_ENDPOINT'] ?? '';
+$newt_id    = $cfg['NEWT_ID']           ?? '';
+$newt_secret= $cfg['NEWT_SECRET']       ?? '';
+$interface  = $cfg['INTERFACE']         ?? 'newt';
+$mtu        = $cfg['MTU']               ?? '1280';
+$dns        = $cfg['DNS']               ?? '9.9.9.9';
+$logLevel   = $cfg['LOG_LEVEL']         ?? 'INFO';
+$disableSsh = $cfg['DISABLE_SSH']       ?? '1';
+
+// Read current daemon/interface state
+$daemonRunning = \Newt\daemonRunning();
+$interfaceUp   = \Newt\interfaceExists($interface);
+$connected     = $daemonRunning && $interfaceUp;
+?>
+
+<style>
+    .newt-status-card {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 16px 20px;
+        background: var(--panel-bg, #fcfcfc);
+        border: 1px solid var(--panel-bdr, #e2e2e2);
+        border-radius: 6px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .newt-status-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        position: relative;
+    }
+    .newt-status-indicator.connected {
+        background-color: #2ecc71;
+    }
+    .newt-status-indicator.connected::after {
+        content: '';
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background-color: #2ecc71;
+        opacity: 0.6;
+        animation: newt-ping 1.5s infinite;
+    }
+    .newt-status-indicator.disconnected {
+        background-color: #e74c3c;
+    }
+    .newt-status-text {
+        font-size: 1.1rem;
+        font-weight: bold;
+    }
+    .newt-status-details {
+        flex-grow: 1;
+        font-size: 0.9rem;
+        color: var(--text-muted, #666);
+    }
+    .newt-log-container {
+        margin-top: 20px;
+        border: 1px solid var(--panel-bdr, #e2e2e2);
+        border-radius: 6px;
+        background: #1e1e1e;
+        color: #f8f8f2;
+        font-family: monospace;
+        font-size: 0.85rem;
+        padding: 12px;
+        max-height: 250px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+    @keyframes newt-ping {
+        0% {
+            transform: scale(1);
+            opacity: 0.8;
+        }
+        70% {
+            transform: scale(2.2);
+            opacity: 0;
+        }
+        100% {
+            transform: scale(2.2);
+            opacity: 0;
+        }
+    }
+    .newt-title-row {
+        font-weight: 600;
+        font-size: 1rem;
+        padding-bottom: 4px;
+    }
+</style>
+
+<div class="newt-status-card">
+    <div class="newt-status-indicator <?= $connected ? 'connected' : 'disconnected' ?>"></div>
+    <div class="newt-status-details">
+        <div class="newt-title-row">
+            Status: <span class="newt-status-text" style="color: <?= $connected ? '#27ae60' : '#c0392b' ?>;"><?= $connected ? 'Connected' : 'Disconnected' ?></span>
+        </div>
+        <div>
+            Daemon: <b><?= $daemonRunning ? 'Running' : 'Stopped' ?></b> &nbsp;|&nbsp; 
+            Interface <code><?= htmlspecialchars($interface) ?></code>: <b><?= $interfaceUp ? 'UP (Active)' : 'DOWN (Inactive)' ?></b>
+        </div>
+    </div>
+    <div>
+        <?php if ($daemonRunning): ?>
+            <input type="button" value="_(Stop Service)_" class="btn btn-danger" onclick="newtStopService()" style="margin: 0;">
+        <?php endif; ?>
+    </div>
+</div>
+
+<blockquote class="inline_help">
+Newt is a user-space WireGuard tunnel client and TCP/UDP proxy designed to work with the Pangolin remote access gateway. Configure the parameters below using the values provided in your Pangolin server dashboard for this site.
+</blockquote>
+
+<form markdown="1" id="newt-settings-form" onsubmit="return false">
+
+_(Enable Newt)_:
+: <select name="ENABLE_NEWT">
+  <?=mk_option($enabled, "1", _("Yes"))?>
+  <?=mk_option($enabled, "0", _("No"))?>
+  </select>
+
+<blockquote class="inline_help">
+Start the Newt daemon automatically on system boot. Disabling stops the service.
+</blockquote>
+
+_(Pangolin Endpoint)_:
+: <input type="url" name="PANGOLIN_ENDPOINT" value="<?=htmlspecialchars($endpoint)?>" placeholder="https://app.pangolin.net" autocomplete="off" required style="width: 250px;">
+
+<blockquote class="inline_help">
+The full URL of your central Pangolin dashboard or VPS controller server.
+</blockquote>
+
+_(Newt ID)_:
+: <input type="text" name="NEWT_ID" value="<?=htmlspecialchars($newt_id)?>" placeholder="e.g. 31frd0uzbjvp721" autocomplete="off" required style="width: 250px;">
+
+<blockquote class="inline_help">
+The unique Site ID generated by the Pangolin controller for this connection.
+</blockquote>
+
+_(Newt Secret)_:
+: <input type="password" name="NEWT_SECRET" value="<?=htmlspecialchars($newt_secret)?>" placeholder="Enter Secret Key" autocomplete="off" required style="width: 250px;">
+
+<blockquote class="inline_help">
+The Secret Key associated with the Site ID. This is kept private and secure.
+</blockquote>
+
+_(WireGuard Interface)_:
+: <input type="text" name="INTERFACE" value="<?=htmlspecialchars($interface)?>" placeholder="newt" autocomplete="off" style="width: 150px;">
+
+<blockquote class="inline_help">
+Name of the tunnel interface created by the client (default: <code>newt</code>).
+</blockquote>
+
+_(Tunnel DNS)_:
+: <input type="text" name="DNS" value="<?=htmlspecialchars($dns)?>" placeholder="9.9.9.9" autocomplete="off" style="width: 150px;">
+
+<blockquote class="inline_help">
+The DNS server address to use inside the WireGuard interface (default: <code>9.9.9.9</code>).
+</blockquote>
+
+_(Interface MTU)_:
+: <input type="number" name="MTU" value="<?=htmlspecialchars($mtu)?>" placeholder="1280" min="576" max="1500" style="width: 150px;">
+
+<blockquote class="inline_help">
+MTU size for the WireGuard interface (default: <code>1280</code>).
+</blockquote>
+
+_(Log Level)_:
+: <select name="LOG_LEVEL">
+  <?=mk_option($logLevel, "PANIC", _("Panic"))?>
+  <?=mk_option($logLevel, "FATAL", _("Fatal"))?>
+  <?=mk_option($logLevel, "ERROR", _("Error"))?>
+  <?=mk_option($logLevel, "WARN",  _("Warn"))?>
+  <?=mk_option($logLevel, "INFO",  _("Info"))?>
+  <?=mk_option($logLevel, "DEBUG", _("Debug"))?>
+  </select>
+
+<blockquote class="inline_help">
+Log verbosity level. Sourced directly into the running context.
+</blockquote>
+
+_(Disable SSH Auth Daemon)_:
+: <select name="DISABLE_SSH">
+  <?=mk_option($disableSsh, "1", _("Yes"))?>
+  <?=mk_option($disableSsh, "0", _("No"))?>
+  </select>
+
+<blockquote class="inline_help">
+Disables Newt's built-in SSH authorization daemon if you do not want to use Pangolin for SSH key management.
+</blockquote>
+
+: <input type="button" value="_(Apply)_" onclick="newtSaveSettings()"><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<h3 style="margin-top: 30px;">_(Newt Connection Logs)_</h3>
+<div class="newt-log-container" id="newt-logs">Loading logs...</div>
+
+<script>
+var newtCsrfToken = <?= json_encode((@parse_ini_file('/var/local/emhttp/var.ini') ?: [])['csrf_token'] ?? '') ?>;
+
+function newtRefreshStatus() {
+    $.post('/plugins/newt/include/action.php', { action: 'get-status', csrf_token: newtCsrfToken }, function(resp) {
+        if (resp) {
+            // Update logs
+            $('#newt-logs').text(resp.logs || 'No logs available.');
+            // Scroll to bottom of log container
+            var logDiv = document.getElementById('newt-logs');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+    }, 'json');
+}
+
+// Initial logs refresh and interval definition
+newtRefreshStatus();
+var newtInterval = setInterval(newtRefreshStatus, 5000);
+
+function newtSaveSettings() {
+    var form = document.getElementById('newt-settings-form');
+    
+    // Check form validation
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    var data = {
+        action:            'save',
+        ENABLE_NEWT:       $('select[name=ENABLE_NEWT]', form).val(),
+        PANGOLIN_ENDPOINT: $('input[name=PANGOLIN_ENDPOINT]', form).val(),
+        NEWT_ID:           $('input[name=NEWT_ID]', form).val(),
+        NEWT_SECRET:       $('input[name=NEWT_SECRET]', form).val(),
+        INTERFACE:         $('input[name=INTERFACE]', form).val(),
+        DNS:               $('input[name=DNS]', form).val(),
+        MTU:               $('input[name=MTU]', form).val(),
+        LOG_LEVEL:         $('select[name=LOG_LEVEL]', form).val(),
+        DISABLE_SSH:       $('select[name=DISABLE_SSH]', form).val(),
+        csrf_token:        newtCsrfToken
+    };
+
+    swal({
+        title: 'Applying...',
+        text: 'Applying configuration and connecting to Pangolin...',
+        type: 'info',
+        showConfirmButton: false
+    });
+
+    $.post('/plugins/newt/include/action.php', data, function(resp) {
+        if (resp && resp.pending) {
+            // Start polling status
+            newtPollApply(resp.since || 0, 30);
+        } else {
+            swal({ title: 'Error', text: 'Unexpected response from server.', type: 'error' });
+        }
+    }, 'json').fail(function(xhr) {
+        var errText = 'Request failed';
+        if (xhr.responseJSON && xhr.responseJSON.error) {
+            errText = xhr.responseJSON.error;
+        } else if (xhr.responseText) {
+            errText = xhr.responseText;
+        }
+        swal({ title: 'Error', text: errText, type: 'error' });
+    });
+}
+
+function newtPollApply(since, triesLeft) {
+    $.post('/plugins/newt/include/action.php', { action: 'apply-status', csrf_token: newtCsrfToken }, function(res) {
+        var done = res && res.ts >= since && (res.ok === true || res.ok === false);
+        if (done) {
+            if (res.ok) {
+                swal({ title: 'Connected!', text: res.message || 'Newt tunnel is active.', type: 'success', timer: 2000 });
+            } else {
+                swal({ title: 'Apply Failed', text: res.message || 'Could not connect to Pangolin.', type: 'error' });
+            }
+            setTimeout(function() { location.reload(); }, 2000);
+            return;
+        }
+        if (triesLeft <= 0) {
+            swal({ title: 'Still Connecting', text: 'Newt is still connecting in the background. Refreshing...', type: 'info' });
+            setTimeout(function() { location.reload(); }, 2000);
+            return;
+        }
+        setTimeout(function() { newtPollApply(since, triesLeft - 1); }, 1000);
+    }, 'json').fail(function() {
+        if (triesLeft <= 0) { location.reload(); return; }
+        setTimeout(function() { newtPollApply(since, triesLeft - 1); }, 1000);
+    });
+}
+
+function newtStopService() {
+    swal({
+        title: 'Stop Newt Service?',
+        text: 'This will bring down the secure tunnel to Pangolin.',
+        type: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e74c3c',
+        confirmButtonText: 'Stop',
+        cancelButtonText: 'Cancel'
+    }, function(confirmed) {
+        if (confirmed) {
+            swal({ title: 'Stopping...', text: 'Stopping daemon...', type: 'info', showConfirmButton: false });
+            $.post('/plugins/newt/include/action.php', { action: 'stop', csrf_token: newtCsrfToken }, function(res) {
+                if (res && res.success) {
+                    swal({ title: 'Stopped', text: 'Newt service stopped.', type: 'success', timer: 1500 });
+                } else {
+                    swal({ title: 'Failed to Stop', text: res.message || 'Service could not be stopped.', type: 'error' });
+                }
+                setTimeout(function() { location.reload(); }, 1500);
+            }, 'json').fail(function() {
+                setTimeout(function() { location.reload(); }, 1500);
+            });
+        }
+    });
+}
+
+// Clean interval on navigation away
+window.addEventListener('beforeunload', function() {
+    clearInterval(newtInterval);
+});
+</script>
+<?php
+} catch (\Throwable $e) {
+    echo "<div style='background:#fee;padding:12px;border:1px solid #c00;border-radius:4px;'>"
+       . "<b>Newt plugin error</b><pre>" . htmlspecialchars($e->getMessage() . "\n@ " . $e->getFile() . ':' . $e->getLine()) . "</pre></div>";
+}
+?>

@@ -1,0 +1,12 @@
+                 |-----handy-ruler------------------------------------------------------|
+unraid-newt-utils: unraid-newt-utils (utilities for running Newt on Unraid)
+unraid-newt-utils:
+unraid-newt-utils: This package provides the scripts, rc.d service, and Dynamix WebGUI
+unraid-newt-utils: pages required to run the Newt WireGuard-tunnel client natively on
+unraid-newt-utils: Unraid OS as a system plugin.
+unraid-newt-utils:
+unraid-newt-utils: Pangolin / Newt: https://pangolin.net
+unraid-newt-utils:
+unraid-newt-utils:
+unraid-newt-utils:
+unraid-newt-utils:
